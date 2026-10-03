@@ -39,6 +39,7 @@ let showRazorAndOutlines = true
 let razorObjects = []
 let artSnapshot = null
 let artBounds // non-white extent of artSnapshot — see findContentBounds()
+let crispZoom = true // false = the old soft, blurry zoom
 
 // EXPERIMENT — one dedicated 3-colour palette per razor object (index 0-11,
 // matching objects 1-12), white stays the shared alternating background for
@@ -91,7 +92,7 @@ async function loadRecipe() {
 
 function setup() {
   createCanvas(windowWidth, windowHeight)
-  pixelDensity(1.5) // supersample so the render (and the artSnapshot used for zooming) holds more real detail — isSolidPixel() accounts for this when indexing pixels[]
+  pixelDensity(3) // supersample so the render (and the artSnapshot used for zooming) holds more real detail — isSolidPixel() accounts for this when indexing pixels[]
   colorMode(HSB, 360, 100, 100)
   rectMode(CENTER)
   //randomSeed(10); // keep the random chamfers/lean directions stable across resizes
@@ -386,7 +387,12 @@ function renderView() {
     let cropX = constrain(obj.x - cropW / 2, 0, width - cropW)
     let cropY = constrain(obj.y - cropH / 2, 0, height - cropH)
 
+    // scale up without the browser's smoothing, so the zoom shows crisp
+    // square pixels (rough) rather than a soft blur. How big those pixels
+    // are is set by pixelDensity() in setup()
+    drawingContext.imageSmoothingEnabled = !crispZoom
     image(artSnapshot, f.artX, f.artY, f.artW, f.artH, cropX, cropY, cropW, cropH)
+    drawingContext.imageSmoothingEnabled = true
   }
 
   drawAirmailBorder(f.b)
