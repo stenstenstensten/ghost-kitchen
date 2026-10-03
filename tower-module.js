@@ -57,6 +57,8 @@ let focusIndex = 0
 let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
 let textBlue // dark blue for the box rule and step text, set in setup()
 let stripeColours = []
+let stripeIsWhite = [] // white stripes get no little line
+let stripeTickJitter = [] // per stripe, per border crossing: [length factor, angle]
 let stripeWidthFrac = 1.3 // stripe width as a multiple of the border thickness
 
 // the recipe shown in the step box: {title, steps: [12 strings]}. Picked
@@ -286,12 +288,16 @@ function draw() {
   artSnapshot = get()
   artBounds = findContentBounds()
 
-  // airmail border stripe colours, picked once per generation: half shades
-  // of the indigo seed, half the baubles' own dark palette colours
+  // airmail border stripes, picked once per generation so they stay put
+  // between zooms: each stripe's colour — 45% indigo shades, 35% bauble
+  // colours, 20% white (an uneven gap) — plus, for the little line on each
+  // of its border crossings, a length factor and a small angle wobble
   stripeColours = []
+  stripeIsWhite = []
+  stripeTickJitter = []
   for (let i = 0; i < 200; i++) {
-    // 45% indigo shades, 35% bauble colours, 20% white (an uneven gap)
     let r = random()
+    stripeIsWhite.push(r >= 0.8)
     stripeColours.push(
       r < 0.45
         ? randomNearColour(seedColour, 0.1)
@@ -299,6 +305,11 @@ function draw() {
           ? random(razorPalettes)[0]
           : color(0, 0, 100),
     )
+    let crossings = []
+    for (let k = 0; k < 4; k++) {
+      crossings.push([random(0.75, 1.25), radians(random(-10, 10))])
+    }
+    stripeTickJitter.push(crossings)
   }
 
   focusIndex = 0
@@ -467,42 +478,59 @@ function drawAirmailBorder(b) {
   ctx.restore() // also resets globalAlpha
 }
 
-// a tiny razor-outline-style line (black edge, white body, red core, round
+// a small razor-outline-style line (black edge, white body, red core, round
 // ends — same layering as traceOutlinePoint()) down the centre of every
 // coloured stripe, wherever it crosses the border: from the middle of the
-// border to its inside edge, poking a little way into the sketch
+// border to just past its inside edge. Roughened by giving each line its own
+// length and slight angle, and softening the black edge with the same
+// centre-plus-4-offset-copies trick as the stripes.
 function drawStripeTicks(b) {
   let s = b * stripeWidthFrac
-  let over = b * 0.35 // how far past the inside edge it pokes
+  let len = b * 0.64 // along each axis, before the per-line length factor
   let n = ceil((width + height) / s) + 2
 
-  // each stripe's centre line is x + y = k; points on it are (x, k - x)
+  // each stripe's centre line is x + y = k; a line starts on it at the
+  // middle of a border band and heads inward along it
   let segs = []
   for (let i = 0; i < n; i += 2) {
+    let idx = (i / 2) % stripeColours.length
+    if (stripeIsWhite[idx]) continue
     let k = i * s + s / 2
-    // top and bottom bands: run along y
-    for (let [y1, y2] of [
-      [b / 2, b + over],
-      [height - b / 2, height - b - over],
-    ]) {
-      let x1 = k - y1
-      if (x1 > b && x1 < width - b) segs.push([x1, y1, k - y2, y2])
-    }
-    // left and right bands: run along x
-    for (let [x1, x2] of [
-      [b / 2, b + over],
-      [width - b / 2, width - b - over],
-    ]) {
-      let y1 = k - x1
-      if (y1 > b && y1 < height - b) segs.push([x1, y1, x2, k - x2])
+    let starts = [
+      [k - b / 2, b / 2, -1, 1], // top band, heading down
+      [k - (height - b / 2), height - b / 2, 1, -1], // bottom band, heading up
+      [b / 2, k - b / 2, 1, -1], // left band, heading right
+      [width - b / 2, k - (width - b / 2), -1, 1], // right band, heading left
+    ]
+    for (let c = 0; c < 4; c++) {
+      let [x, y, dx, dy] = starts[c]
+      let onTopOrBottom = c < 2
+      let along = onTopOrBottom ? x : y
+      let limit = onTopOrBottom ? width : height
+      if (along <= b || along >= limit - b) continue
+
+      let [f, a] = stripeTickJitter[idx][c]
+      let vx = dx * len * f
+      let vy = dy * len * f
+      segs.push([x, y, x + vx * cos(a) - vy * sin(a), y + vx * sin(a) + vy * cos(a)])
     }
   }
 
   strokeCap(ROUND)
+
+  // soft black edge
+  let d = b * 0.06
+  drawingContext.globalAlpha = 0.35
+  stroke(0, 0, 0)
+  strokeWeight(b * 0.52)
+  for (let [ox, oy] of [[0, 0], [0, -d], [0, d], [-d, 0], [d, 0]]) {
+    for (let [x1, y1, x2, y2] of segs) line(x1 + ox, y1 + oy, x2 + ox, y2 + oy)
+  }
+  drawingContext.globalAlpha = 1
+
   for (let [weight, col] of [
-    [b * 0.26, color(0, 0, 0)],
-    [b * 0.19, color(0, 0, 100)],
-    [b * 0.08, color(0, 100, 100)],
+    [b * 0.38, color(0, 0, 100)],
+    [b * 0.16, color(0, 100, 100)],
   ]) {
     stroke(col)
     strokeWeight(weight)
