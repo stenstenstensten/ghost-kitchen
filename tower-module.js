@@ -52,6 +52,30 @@ let razorPalettes = []
 // click/tap, wrapping back to 0 after the 7th object.
 let focusIndex = 0
 
+// the recipe shown in the text strip: {title, steps: [12 strings]}. Picked
+// at random from the recipe repo's ghost-kitchen/index.json, falling back to
+// the local recipes/ copy when GitHub can't be reached (or offline).
+// Null until loaded — the strip just shows nothing until then.
+let recipe = null
+let recipeSources = [
+  'https://raw.githubusercontent.com/stenstenstensten/recipeRepository/main/ghost-kitchen/',
+  'recipes/',
+]
+
+async function loadRecipe() {
+  for (let base of recipeSources) {
+    try {
+      let list = await (await fetch(base + 'index.json')).json()
+      let file = list[floor(Math.random() * list.length)]
+      recipe = await (await fetch(base + file)).json()
+      renderView()
+      return
+    } catch (e) {
+      // not there (yet) — try the next source
+    }
+  }
+}
+
 function setup() {
   createCanvas(windowWidth, windowHeight)
   pixelDensity(1.5) // supersample so the render (and the artSnapshot used for zooming) holds more real detail — isSolidPixel() accounts for this when indexing pixels[]
@@ -79,6 +103,8 @@ function setup() {
     [color(245, 55, 42), color(245, 42, 64), color(245, 25, 88)], // 11: indigo
     [color(350, 60, 45), color(350, 45, 66), color(350, 28, 90)], // 12: crimson
   ]
+
+  loadRecipe()
 }
 
 // ported from sketch.js's computeLayout(), extended with a matching column
@@ -277,6 +303,7 @@ function renderView() {
 
   if (focusIndex === 0) {
     image(artSnapshot, 0, 0, width, height)
+    drawTextStrip()
     return
   }
 
@@ -299,6 +326,94 @@ function renderView() {
   let cropY = constrain(obj.y - cropH / 2, 0, height - cropH)
 
   image(artSnapshot, 0, 0, width, height, cropX, cropY, cropW, cropH)
+  drawTextStrip()
+}
+
+// the text block in the bottom row: the recipe title at full view, or the
+// step matching the zoomed razor object. Drawn on top of the (zoomed or
+// full) snapshot every time, so it never scales with the zoom. The first
+// letter is a drop cap the full height of the block, manuscript-style.
+function drawTextStrip() {
+  if (!recipe) return
+
+  let left = gridLeft
+  let top = gridTop + cellH * rows
+  let w = cellW * cols
+  let h = height - top
+  let pad = h * 0.15
+  let innerH = h - pad * 2
+
+  noStroke()
+  fill(bgColour)
+  rectMode(CORNER)
+  rect(left, top, w, h)
+  rectMode(CENTER)
+
+  let isTitle = focusIndex === 0
+  let body = isTitle ? recipe.title : recipe.steps[focusIndex - 1]
+  if (!body) return
+  let label = isTitle
+    ? 'Serves ' + recipe.serves + ' · tap to begin'
+    : 'Step ' + focusIndex + ' of ' + recipe.steps.length
+
+  // drop cap: sized so the letter's cap height fills the block
+  textFont('Georgia')
+  textStyle(NORMAL)
+  textAlign(LEFT, TOP)
+  let capSize = innerH * 1.35
+  textSize(capSize)
+  let cap = body.charAt(0)
+  let capW = textWidth(cap)
+  let capTop = top + pad - capSize * 0.22 // trim the font's built-in space above capitals
+  fill(seedColour)
+  text(cap, left + pad, capTop)
+
+  // label + wrapped remaining text, to the right of the drop cap
+  let textLeft = left + pad + capW + pad * 0.6
+  let textW = left + w - pad - textLeft
+  let labelSize = innerH * 0.16
+  fill(strokeColour)
+  textSize(labelSize)
+  text(label.toUpperCase(), textLeft, top + pad)
+
+  let bodyTop = top + pad + labelSize * 1.6
+  let bodyH = top + h - pad - bodyTop
+  let size = fitTextSize(body.slice(1), textW, bodyH, isTitle ? 0.75 : 0.4)
+  textSize(size)
+  let lines = wrapLines(body.slice(1), textW)
+  for (let i = 0; i < lines.length; i++) {
+    text(lines[i], textLeft, bodyTop + i * size * 1.2)
+  }
+}
+
+// largest text size (capped at maxFrac of the box height) whose wrapped
+// lines fit inside w x h
+function fitTextSize(str, w, h, maxFrac) {
+  let size = h * maxFrac
+  while (size > 6) {
+    textSize(size)
+    if (wrapLines(str, w).length * size * 1.2 <= h) return size
+    size *= 0.92
+  }
+  return size
+}
+
+// greedy word wrap at the current textSize()
+function wrapLines(str, w) {
+  let words = str.split(' ')
+  let lines = []
+  let line = ''
+  for (let word of words) {
+    let next = line ? line + ' ' + word : word
+    if (line && textWidth(next) > w) {
+      lines.push(line)
+      line = word
+    } else {
+      line = next
+    }
+  }
+  if (line) lines.push(line)
+  return lines
 }
 
 // click/tap cycles: full view -> object 1 -> object 2 -> ... -> object 7
