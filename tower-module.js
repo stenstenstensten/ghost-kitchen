@@ -57,6 +57,7 @@ let focusIndex = 0
 let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
 let textBlue // dark blue for the box rule and step text, set in setup()
 let stripeColours = []
+let stripeWidthFrac = 1.3 // stripe width as a multiple of the border thickness
 
 // the recipe shown in the step box: {title, steps: [12 strings]}. Picked
 // at random from the recipe repo's ghost-kitchen/index.json, falling back to
@@ -289,10 +290,14 @@ function draw() {
   // of the indigo seed, half the baubles' own dark palette colours
   stripeColours = []
   for (let i = 0; i < 200; i++) {
+    // 45% indigo shades, 35% bauble colours, 20% white (an uneven gap)
+    let r = random()
     stripeColours.push(
-      random() < 0.5
+      r < 0.45
         ? randomNearColour(seedColour, 0.1)
-        : random(razorPalettes)[0],
+        : r < 0.8
+          ? random(razorPalettes)[0]
+          : color(0, 0, 100),
     )
   }
 
@@ -366,6 +371,7 @@ function renderView() {
 
   drawAirmailBorder(f.b)
   if (recipe) drawTextBox(f)
+  drawStripeTicks(f.b)
 }
 
 // bounding box of everything non-white in the finished artwork, so the
@@ -435,7 +441,7 @@ function drawAirmailBorder(b) {
   // each stripe is a central shape plus 4 translucent copies of it, nudged
   // up, down, left and right — the overlaps build up solid colour in the
   // middle and fade out at the edges, softening them
-  let s = b * 1.3 // stripe width, measured along the edge
+  let s = b * stripeWidthFrac // stripe width, measured along the edge
   let d = s * 0.15 // how far each copy is nudged
   let offsets = [
     [0, 0],
@@ -459,6 +465,50 @@ function drawAirmailBorder(b) {
     }
   }
   ctx.restore() // also resets globalAlpha
+}
+
+// a tiny razor-outline-style line (black edge, white body, red core, round
+// ends — same layering as traceOutlinePoint()) down the centre of every
+// coloured stripe, wherever it crosses the border: from the middle of the
+// border to its inside edge, poking a little way into the sketch
+function drawStripeTicks(b) {
+  let s = b * stripeWidthFrac
+  let over = b * 0.35 // how far past the inside edge it pokes
+  let n = ceil((width + height) / s) + 2
+
+  // each stripe's centre line is x + y = k; points on it are (x, k - x)
+  let segs = []
+  for (let i = 0; i < n; i += 2) {
+    let k = i * s + s / 2
+    // top and bottom bands: run along y
+    for (let [y1, y2] of [
+      [b / 2, b + over],
+      [height - b / 2, height - b - over],
+    ]) {
+      let x1 = k - y1
+      if (x1 > b && x1 < width - b) segs.push([x1, y1, k - y2, y2])
+    }
+    // left and right bands: run along x
+    for (let [x1, x2] of [
+      [b / 2, b + over],
+      [width - b / 2, width - b - over],
+    ]) {
+      let y1 = k - x1
+      if (y1 > b && y1 < height - b) segs.push([x1, y1, x2, k - x2])
+    }
+  }
+
+  strokeCap(ROUND)
+  for (let [weight, col] of [
+    [b * 0.26, color(0, 0, 0)],
+    [b * 0.19, color(0, 0, 100)],
+    [b * 0.08, color(0, 100, 100)],
+  ]) {
+    stroke(col)
+    strokeWeight(weight)
+    for (let [x1, y1, x2, y2] of segs) line(x1, y1, x2, y2)
+  }
+  noStroke()
 }
 
 // the text box, full width inside the border along the bottom: white band,
