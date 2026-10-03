@@ -57,8 +57,6 @@ let focusIndex = 0
 let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
 let textBlue // dark blue for the box rule and step text, set in setup()
 let stripeColours = []
-let stripeJitter = [] // per stripe, per layer: 8 corner offsets — see draw()
-let stripeLayers = 4
 
 // the recipe shown in the step box: {title, steps: [12 strings]}. Picked
 // at random from the recipe repo's ghost-kitchen/index.json, falling back to
@@ -290,23 +288,12 @@ function draw() {
   // airmail border stripe colours, picked once per generation: half shades
   // of the indigo seed, half the baubles' own dark palette colours
   stripeColours = []
-  stripeJitter = []
   for (let i = 0; i < 200; i++) {
     stripeColours.push(
       random() < 0.5
         ? randomNearColour(seedColour, 0.1)
         : random(razorPalettes)[0],
     )
-    // each stripe is 4 translucent layers, each with its 4 corners nudged
-    // by up to 25% of the stripe width — stored as fractions of the stripe
-    // width so it scales with the window and stays put between zooms
-    let layers = []
-    for (let l = 0; l < stripeLayers; l++) {
-      let pts = []
-      for (let k = 0; k < 8; k++) pts.push(random(-0.25, 0.25))
-      layers.push(pts)
-    }
-    stripeJitter.push(layers)
   }
 
   focusIndex = 0
@@ -445,21 +432,29 @@ function drawAirmailBorder(b) {
   ctx.rect(b, b, width - b * 2, height - b * 2)
   ctx.clip('evenodd')
 
-  // each stripe is stacked from slightly offset translucent copies, so its
-  // edges blur and wobble instead of reading as one crisp polygon
+  // each stripe is a central shape plus 4 translucent copies of it, nudged
+  // up, down, left and right — the overlaps build up solid colour in the
+  // middle and fade out at the edges, softening them
   let s = b * 1.3 // stripe width, measured along the edge
+  let d = s * 0.15 // how far each copy is nudged
+  let offsets = [
+    [0, 0],
+    [0, -d],
+    [0, d],
+    [-d, 0],
+    [d, 0],
+  ]
   let n = ceil((width + height) / s) + 2
-  ctx.globalAlpha = 0.4
+  ctx.globalAlpha = 0.35
   for (let i = 0; i < n; i += 2) {
     let c = i * s
-    let idx = (i / 2) % stripeColours.length
-    fill(stripeColours[idx])
-    for (let j of stripeJitter[idx]) {
+    fill(stripeColours[(i / 2) % stripeColours.length])
+    for (let [ox, oy] of offsets) {
       quad(
-        c + j[0] * s, j[1] * s,
-        c + s + j[2] * s, j[3] * s,
-        c + s - height + j[4] * s, height + j[5] * s,
-        c - height + j[6] * s, height + j[7] * s,
+        c + ox, oy,
+        c + s + ox, oy,
+        c + s - height + ox, height + oy,
+        c - height + ox, height + oy,
       )
     }
   }
