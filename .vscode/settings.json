@@ -1,0 +1,6 @@
+{
+  "liveServer.settings.port": 5500,
+  "liveServer.settings.ignoreFiles": ["**/*.backup*.js", "**/*.archive*.js", "oven-3d/**"],
+  "files.autoSave": "afterDelay",
+  "editor.formatOnSave": false
+}

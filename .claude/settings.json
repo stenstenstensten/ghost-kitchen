@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pkill -f \"remote-debugging-port=9263\")",
+      "Bash(pkill -f \"remote-debugging-port=9264\")",
+      "Bash(pkill -f \"remote-debugging-port=9265\")",
+      "Bash(node check-error.mjs \"ws://127.0.0.1:9266/devtools/page/19F1C157B9E309F48F9604008A433FA8\")"
+    ]
+  }
+}
