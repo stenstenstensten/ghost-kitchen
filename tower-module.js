@@ -52,7 +52,12 @@ let razorPalettes = []
 // click/tap, wrapping back to 0 after the 7th object.
 let focusIndex = 0
 
-// the recipe shown in the text strip: {title, steps: [12 strings]}. Picked
+// zoom-frame styling — see drawZoomFrame()
+let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
+let textBlue // dark blue for the box rule and step text, set in setup()
+let stripeColours = []
+
+// the recipe shown in the step box: {title, steps: [12 strings]}. Picked
 // at random from the recipe repo's ghost-kitchen/index.json, falling back to
 // the local recipes/ copy when GitHub can't be reached (or offline).
 // Null until loaded — the strip just shows nothing until then.
@@ -104,7 +109,11 @@ function setup() {
     [color(350, 60, 45), color(350, 45, 66), color(350, 28, 90)], // 12: crimson
   ]
 
+  textBlue = color(240, 80, 35)
+
   loadRecipe()
+  // canvas text only uses a web font once it's loaded — redraw when it is
+  document.fonts.load('16px "IBM Plex Mono"').then(() => renderView())
 }
 
 // ported from sketch.js's computeLayout(), extended with a matching column
@@ -273,6 +282,18 @@ function draw() {
   // mouseClicked()/renderView()) can pan/scale it without ever re-running
   // the (expensive) generative drawing above
   artSnapshot = get()
+
+  // airmail border stripe colours, picked once per generation: half shades
+  // of the indigo seed, half the baubles' own dark palette colours
+  stripeColours = []
+  for (let i = 0; i < 200; i++) {
+    stripeColours.push(
+      random() < 0.5
+        ? randomNearColour(seedColour, 0.1)
+        : random(razorPalettes)[0],
+    )
+  }
+
   focusIndex = 0
   renderView()
 }
@@ -303,7 +324,6 @@ function renderView() {
 
   if (focusIndex === 0) {
     image(artSnapshot, 0, 0, width, height)
-    drawTextStrip()
     return
   }
 
@@ -326,61 +346,107 @@ function renderView() {
   let cropY = constrain(obj.y - cropH / 2, 0, height - cropH)
 
   image(artSnapshot, 0, 0, width, height, cropX, cropY, cropW, cropH)
-  drawTextStrip()
+  drawZoomFrame()
 }
 
-// the text block in the bottom row: the recipe title at full view, or the
-// step matching the zoomed razor object. Drawn on top of the (zoomed or
-// full) snapshot every time, so it never scales with the zoom. The first
-// letter is a drop cap the full height of the block, manuscript-style.
-function drawTextStrip() {
-  if (!recipe) return
+// zoom-view frame: a white airmail-envelope border of thick diagonal
+// stripes around the whole canvas, with the step's text box sitting inside
+// it across the full bottom. Not drawn at full view. Drawn on top of the
+// zoomed snapshot every time, so it never scales with the zoom.
+function drawZoomFrame() {
+  let b = min(width, height) * 0.04 // border thickness
+  drawAirmailBorder(b)
+  if (recipe) drawStepBox(b)
+}
 
-  let left = gridLeft
-  let top = gridTop + cellH * rows
-  let w = cellW * cols
-  let h = height - top
-  let pad = h * 0.15
-  let innerH = h - pad * 2
-
+function drawAirmailBorder(b) {
   noStroke()
   fill(bgColour)
   rectMode(CORNER)
-  rect(left, top, w, h)
+  rect(0, 0, width, b)
+  rect(0, height - b, width, b)
+  rect(0, 0, b, height)
+  rect(width - b, 0, b, height)
   rectMode(CENTER)
 
-  let isTitle = focusIndex === 0
-  let body = isTitle ? recipe.title : recipe.steps[focusIndex - 1]
-  if (!body) return
-  let label = isTitle
-    ? 'Serves ' + recipe.serves + ' · tap to begin'
-    : 'Step ' + focusIndex + ' of ' + recipe.steps.length
+  // clip to the border ring, then lay full-canvas diagonal stripes across
+  // it — colour, white gap, colour, white gap — like an airmail envelope
+  let ctx = drawingContext
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, width, height)
+  ctx.rect(b, b, width - b * 2, height - b * 2)
+  ctx.clip('evenodd')
 
-  // drop cap: sized so the letter's cap height fills the block
-  textFont('Georgia')
+  let s = b * 1.3 // stripe width, measured along the edge
+  let n = ceil((width + height) / s) + 2
+  for (let i = 0; i < n; i += 2) {
+    let c = i * s
+    fill(stripeColours[(i / 2) % stripeColours.length])
+    quad(c, 0, c + s, 0, c + s - height, height, c - height, height)
+  }
+  ctx.restore()
+}
+
+// the step text box, full width inside the border along the bottom: white
+// band, then a dark blue rule, then the text — a mono drop cap the full
+// height of the text block, a small label, and the step itself
+function drawStepBox(b) {
+  let step = recipe.steps[focusIndex - 1]
+  if (!step) return
+
+  let boxH = (height - b * 2) * 0.17
+  let x = b
+  let y = height - b - boxH
+  let w = width - b * 2
+
+  let whiteBand = b * 0.3
+  let rule = max(2, b * 0.12)
+
+  rectMode(CORNER)
+  noStroke()
+  fill(bgColour)
+  rect(x, y, w, boxH)
+  noFill()
+  stroke(textBlue)
+  strokeWeight(rule)
+  rect(x + whiteBand, y + whiteBand, w - whiteBand * 2, boxH - whiteBand * 2)
+  rectMode(CENTER)
+
+  let pad = boxH * 0.16
+  let left = x + whiteBand + rule + pad
+  let top = y + whiteBand + rule + pad
+  let right = x + w - whiteBand - rule - pad
+  let bottom = y + boxH - whiteBand - rule - pad
+  let innerH = bottom - top
+
+  noStroke()
+  textFont(monoFont)
   textStyle(NORMAL)
-  textAlign(LEFT, TOP)
-  let capSize = innerH * 1.35
+
+  // drop cap: cap height (~0.7 of the font size) fills the text block
+  let capSize = innerH / 0.7
   textSize(capSize)
-  let cap = body.charAt(0)
-  let capW = textWidth(cap)
-  let capTop = top + pad - capSize * 0.22 // trim the font's built-in space above capitals
-  fill(seedColour)
-  text(cap, left + pad, capTop)
+  textAlign(LEFT, BASELINE)
+  fill(textBlue)
+  text(step.charAt(0), left, bottom)
+  let capW = textWidth(step.charAt(0))
 
-  // label + wrapped remaining text, to the right of the drop cap
-  let textLeft = left + pad + capW + pad * 0.6
-  let textW = left + w - pad - textLeft
-  let labelSize = innerH * 0.16
-  fill(strokeColour)
+  let textLeft = left + capW + pad * 0.6
+  let textW = right - textLeft
+  let label = 'Step ' + focusIndex + '/' + recipe.steps.length + ' · ' + recipe.title
+  let labelSize = innerH * 0.18
+  textAlign(LEFT, TOP)
   textSize(labelSize)
-  text(label.toUpperCase(), textLeft, top + pad)
+  fill(seedColour)
+  text(label.toUpperCase(), textLeft, top)
 
-  let bodyTop = top + pad + labelSize * 1.6
-  let bodyH = top + h - pad - bodyTop
-  let size = fitTextSize(body.slice(1), textW, bodyH, isTitle ? 0.75 : 0.4)
+  let bodyTop = top + labelSize * 1.7
+  let bodyH = bottom - bodyTop
+  let size = fitTextSize(step.slice(1), textW, bodyH, 0.42)
   textSize(size)
-  let lines = wrapLines(body.slice(1), textW)
+  fill(textBlue)
+  let lines = wrapLines(step.slice(1), textW)
   for (let i = 0; i < lines.length; i++) {
     text(lines[i], textLeft, bodyTop + i * size * 1.2)
   }
