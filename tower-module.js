@@ -444,6 +444,24 @@ function frameLayout() {
   }
 }
 
+// the softening trick used on the border stripes and text box: draws
+// whatever drawFn draws 5 times — in place, then nudged up, down, left and
+// right by d — each at 35% opacity, so overlaps build up solid colour in the
+// middle and the edges fade. xScale shrinks the sideways nudge (for text
+// that's been stretched horizontally).
+function softly(d, drawFn, xScale = 1) {
+  let ctx = drawingContext
+  let prevAlpha = ctx.globalAlpha
+  ctx.globalAlpha = 0.35
+  for (let [ox, oy] of [[0, 0], [0, -d], [0, d], [-d * xScale, 0], [d * xScale, 0]]) {
+    push()
+    translate(ox, oy)
+    drawFn()
+    pop()
+  }
+  ctx.globalAlpha = prevAlpha
+}
+
 // white airmail-envelope border of thick diagonal stripes around the canvas
 function drawAirmailBorder(b) {
   noStroke()
@@ -464,31 +482,17 @@ function drawAirmailBorder(b) {
   ctx.rect(b, b, width - b * 2, height - b * 2)
   ctx.clip('evenodd')
 
-  // each stripe is a central shape plus 4 translucent copies of it, nudged
+  // each stripe is softened with softly(): a central shape plus 4 translucent copies of it, nudged
   // up, down, left and right — the overlaps build up solid colour in the
   // middle and fade out at the edges, softening them
   let s = b * stripeWidthFrac // stripe width, measured along the edge
-  let d = s * 0.15 // how far each copy is nudged
-  let offsets = [
-    [0, 0],
-    [0, -d],
-    [0, d],
-    [-d, 0],
-    [d, 0],
-  ]
   let n = ceil((width + height) / s) + 2
-  ctx.globalAlpha = 0.35
   for (let i = 0; i < n; i += 2) {
     let c = i * s
     fill(stripeColours[(i / 2) % stripeColours.length])
-    for (let [ox, oy] of offsets) {
-      quad(
-        c + ox, oy,
-        c + s + ox, oy,
-        c + s - height + ox, height + oy,
-        c - height + ox, height + oy,
-      )
-    }
+    softly(s * 0.15, () =>
+      quad(c, 0, c + s, 0, c + s - height, height, c - height, height),
+    )
   }
   ctx.restore() // also resets globalAlpha
 }
@@ -575,10 +579,13 @@ function drawTextBox(f) {
   noStroke()
   fill(bgColour)
   rect(x, y, w, boxH)
-  fill(boxFill)
-  stroke(textBlue)
-  strokeWeight(rule)
-  rect(x + whiteBand, y + whiteBand, w - whiteBand * 2, boxH - whiteBand * 2)
+  // blue panel + rule, softened the same way as the border stripes
+  softly(f.b * stripeWidthFrac * 0.15, () => {
+    fill(boxFill)
+    stroke(textBlue)
+    strokeWeight(rule)
+    rect(x + whiteBand, y + whiteBand, w - whiteBand * 2, boxH - whiteBand * 2)
+  })
   rectMode(CENTER)
 
   let pad = boxH * 0.16
@@ -597,7 +604,8 @@ function drawTextBox(f) {
   textSize(capSize)
   textAlign(LEFT, BASELINE)
   fill(boxText)
-  text(body.charAt(0), left, bottom)
+  let textSoft = f.b * 0.04 // much smaller nudge than the panel, so it stays readable
+  softly(textSoft, () => text(body.charAt(0), left, bottom))
   let capW = textWidth(body.charAt(0))
 
   let textLeft = left + capW + pad * 0.6
@@ -615,8 +623,10 @@ function drawTextBox(f) {
   for (let i = 0; i < n; i++) {
     push()
     translate(textLeft, top + capH + i * (capH + size * 0.35))
-    scale(textW / textWidth(lines[i]), 1)
-    text(lines[i], 0, 0)
+    let sx = textW / textWidth(lines[i])
+    scale(sx, 1)
+    // nudge divided by the stretch, so the softening is even both ways
+    softly(textSoft, () => text(lines[i], 0, 0), 1 / sx)
     pop()
   }
 }
