@@ -95,7 +95,7 @@
     tabs.appendChild(b);
   }
   document.getElementById('reroll').addEventListener('click', () => {
-    frame.src = frame.src;
+    frame.contentWindow.location.reload();
   });
 
   let start = location.hash.slice(1);
