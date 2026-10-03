@@ -298,12 +298,12 @@ function draw() {
         : random(razorPalettes)[0],
     )
     // each stripe is 4 translucent layers, each with its 4 corners nudged
-    // by up to 15% of the stripe width — stored as fractions of the stripe
+    // by up to 25% of the stripe width — stored as fractions of the stripe
     // width so it scales with the window and stays put between zooms
     let layers = []
     for (let l = 0; l < stripeLayers; l++) {
       let pts = []
-      for (let k = 0; k < 8; k++) pts.push(random(-0.15, 0.15))
+      for (let k = 0; k < 8; k++) pts.push(random(-0.25, 0.25))
       layers.push(pts)
     }
     stripeJitter.push(layers)
@@ -449,7 +449,7 @@ function drawAirmailBorder(b) {
   // edges blur and wobble instead of reading as one crisp polygon
   let s = b * 1.3 // stripe width, measured along the edge
   let n = ceil((width + height) / s) + 2
-  ctx.globalAlpha = 0.5
+  ctx.globalAlpha = 0.4
   for (let i = 0; i < n; i += 2) {
     let c = i * s
     let idx = (i / 2) % stripeColours.length
@@ -468,15 +468,12 @@ function drawAirmailBorder(b) {
 
 // the text box, full width inside the border along the bottom: white band,
 // then a dark blue rule, then the text — a mono drop cap the full height of
-// the text block, a small label, and the recipe title (full view) or the
-// zoomed object's step
+// the text block, then the recipe title (full view) or the zoomed object's
+// step
 function drawTextBox(f) {
   let isTitle = focusIndex === 0
   let body = isTitle ? recipe.title : recipe.steps[focusIndex - 1]
   if (!body) return
-  let label = isTitle
-    ? 'Serves ' + recipe.serves + ' · tap to begin'
-    : 'Step ' + focusIndex + '/' + recipe.steps.length + ' · ' + recipe.title
 
   let x = f.boxX
   let y = f.boxY
@@ -517,24 +514,19 @@ function drawTextBox(f) {
 
   let textLeft = left + capW + pad * 0.6
   let textW = right - textLeft
-  let labelSize = innerH * 0.2
-  textAlign(LEFT, TOP)
-  textSize(labelSize)
-  fill(seedColour)
-  text(label.toUpperCase(), textLeft, top)
 
-  // body text: the title on one line, a step split into two balanced lines;
-  // each line then stretched or squeezed horizontally to run the full
-  // width of the box
-  let bodyTop = top + labelSize * 1.6
-  let bodyH = bottom - bodyTop
+  // body text: the title on one line, a step split into two balanced lines.
+  // Sized so the lines' cap heights (plus the gaps between them) fill the
+  // text block top to bottom, then each line stretched or squeezed
+  // horizontally to run the full width of the box
   let lines = isTitle ? [body.slice(1)] : splitBalanced(body.slice(1))
-  let size = bodyH / (lines.length * 1.15)
+  let n = lines.length
+  let size = innerH / (n * 0.7 + (n - 1) * 0.35)
+  let capH = size * 0.7
   textSize(size)
-  fill(textBlue)
-  for (let i = 0; i < lines.length; i++) {
+  for (let i = 0; i < n; i++) {
     push()
-    translate(textLeft, bodyTop + i * size * 1.15)
+    translate(textLeft, top + capH + i * (capH + size * 0.35))
     scale(textW / textWidth(lines[i]), 1)
     text(lines[i], 0, 0)
     pop()
