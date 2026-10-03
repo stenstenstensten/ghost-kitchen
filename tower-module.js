@@ -52,7 +52,7 @@ let razorPalettes = []
 // click/tap, wrapping back to 0 after the 7th object.
 let focusIndex = 0
 
-// zoom-frame styling — see drawZoomFrame()
+// frame styling — see renderView() / drawTextBox()
 let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
 let textBlue // dark blue for the box rule and step text, set in setup()
 let stripeColours = []
@@ -322,43 +322,66 @@ function drawRazorLabel(x, y, w, h, number) {
 function renderView() {
   if (!artSnapshot) return
 
+  // the artwork sits inside the frame: within the airmail border, above
+  // the text box — never underneath either
+  let f = frameLayout()
+  background(bgColour)
+
   if (focusIndex === 0) {
-    image(artSnapshot, 0, 0, width, height)
-    return
+    // whole artwork, scaled down to fit the art area without stretching
+    let s = min(f.artW / width, f.artH / height)
+    let w = width * s
+    let h = height * s
+    image(artSnapshot, f.artX + (f.artW - w) / 2, f.artY + (f.artH - h) / 2, w, h)
+  } else {
+    let obj = razorObjects[focusIndex - 1]
+    if (!obj) return
+
+    // crop rectangle keeps the art area's aspect ratio (so the zoomed
+    // image never looks stretched), sized around the object with margin
+    let aspect = f.artW / f.artH
+    let cropH = max(obj.w, obj.h) * 2.5
+    let cropW = cropH * aspect
+    if (cropW < obj.w * 2.5) {
+      cropW = obj.w * 2.5
+      cropH = cropW / aspect
+    }
+    cropW = min(cropW, width)
+    cropH = min(cropH, height)
+
+    let cropX = constrain(obj.x - cropW / 2, 0, width - cropW)
+    let cropY = constrain(obj.y - cropH / 2, 0, height - cropH)
+
+    image(artSnapshot, f.artX, f.artY, f.artW, f.artH, cropX, cropY, cropW, cropH)
   }
 
-  let obj = razorObjects[focusIndex - 1]
-  if (!obj) return
+  drawAirmailBorder(f.b)
+  if (recipe) drawTextBox(f)
+}
 
-  // crop rectangle keeps the canvas's own aspect ratio (so the zoomed
-  // image never looks stretched), sized around the object with margin
-  let canvasAspect = width / height
-  let cropH = max(obj.w, obj.h) * 2.5
-  let cropW = cropH * canvasAspect
-  if (cropW < obj.w * 2.5) {
-    cropW = obj.w * 2.5
-    cropH = cropW / canvasAspect
+// frame geometry shared by renderView() and the text box: border thickness,
+// the text box along the bottom inside the border, and the art area above it
+function frameLayout() {
+  let b = min(width, height) * 0.03
+  let gap = b * 0.4
+  let boxH = (height - b * 2) * 0.12
+  let boxX = b
+  let boxY = height - b - boxH
+  let boxW = width - b * 2
+  return {
+    b,
+    boxX,
+    boxY,
+    boxW,
+    boxH,
+    artX: b + gap,
+    artY: b + gap,
+    artW: width - (b + gap) * 2,
+    artH: boxY - gap - (b + gap),
   }
-  cropW = min(cropW, width)
-  cropH = min(cropH, height)
-
-  let cropX = constrain(obj.x - cropW / 2, 0, width - cropW)
-  let cropY = constrain(obj.y - cropH / 2, 0, height - cropH)
-
-  image(artSnapshot, 0, 0, width, height, cropX, cropY, cropW, cropH)
-  drawZoomFrame()
 }
 
-// zoom-view frame: a white airmail-envelope border of thick diagonal
-// stripes around the whole canvas, with the step's text box sitting inside
-// it across the full bottom. Not drawn at full view. Drawn on top of the
-// zoomed snapshot every time, so it never scales with the zoom.
-function drawZoomFrame() {
-  let b = min(width, height) * 0.04 // border thickness
-  drawAirmailBorder(b)
-  if (recipe) drawStepBox(b)
-}
-
+// white airmail-envelope border of thick diagonal stripes around the canvas
 function drawAirmailBorder(b) {
   noStroke()
   fill(bgColour)
@@ -388,20 +411,25 @@ function drawAirmailBorder(b) {
   ctx.restore()
 }
 
-// the step text box, full width inside the border along the bottom: white
-// band, then a dark blue rule, then the text — a mono drop cap the full
-// height of the text block, a small label, and the step itself
-function drawStepBox(b) {
-  let step = recipe.steps[focusIndex - 1]
-  if (!step) return
+// the text box, full width inside the border along the bottom: white band,
+// then a dark blue rule, then the text — a mono drop cap the full height of
+// the text block, a small label, and the recipe title (full view) or the
+// zoomed object's step
+function drawTextBox(f) {
+  let isTitle = focusIndex === 0
+  let body = isTitle ? recipe.title : recipe.steps[focusIndex - 1]
+  if (!body) return
+  let label = isTitle
+    ? 'Serves ' + recipe.serves + ' · tap to begin'
+    : 'Step ' + focusIndex + '/' + recipe.steps.length + ' · ' + recipe.title
 
-  let boxH = (height - b * 2) * 0.17
-  let x = b
-  let y = height - b - boxH
-  let w = width - b * 2
+  let x = f.boxX
+  let y = f.boxY
+  let w = f.boxW
+  let boxH = f.boxH
 
-  let whiteBand = b * 0.3
-  let rule = max(2, b * 0.12)
+  let whiteBand = f.b * 0.3
+  let rule = max(2, f.b * 0.12)
 
   rectMode(CORNER)
   noStroke()
@@ -429,24 +457,23 @@ function drawStepBox(b) {
   textSize(capSize)
   textAlign(LEFT, BASELINE)
   fill(textBlue)
-  text(step.charAt(0), left, bottom)
-  let capW = textWidth(step.charAt(0))
+  text(body.charAt(0), left, bottom)
+  let capW = textWidth(body.charAt(0))
 
   let textLeft = left + capW + pad * 0.6
   let textW = right - textLeft
-  let label = 'Step ' + focusIndex + '/' + recipe.steps.length + ' · ' + recipe.title
-  let labelSize = innerH * 0.18
+  let labelSize = innerH * 0.2
   textAlign(LEFT, TOP)
   textSize(labelSize)
   fill(seedColour)
   text(label.toUpperCase(), textLeft, top)
 
-  let bodyTop = top + labelSize * 1.7
+  let bodyTop = top + labelSize * 1.6
   let bodyH = bottom - bodyTop
-  let size = fitTextSize(step.slice(1), textW, bodyH, 0.42)
+  let size = fitTextSize(body.slice(1), textW, bodyH, isTitle ? 0.75 : 0.45)
   textSize(size)
   fill(textBlue)
-  let lines = wrapLines(step.slice(1), textW)
+  let lines = wrapLines(body.slice(1), textW)
   for (let i = 0; i < lines.length; i++) {
     text(lines[i], textLeft, bodyTop + i * size * 1.2)
   }
