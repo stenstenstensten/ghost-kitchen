@@ -57,6 +57,8 @@ let focusIndex = 0
 let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
 let textBlue // dark blue for the box rule and step text, set in setup()
 let stripeColours = []
+let stripeJitter = [] // per stripe, per layer: 8 corner offsets — see draw()
+let stripeLayers = 4
 
 // the recipe shown in the step box: {title, steps: [12 strings]}. Picked
 // at random from the recipe repo's ghost-kitchen/index.json, falling back to
@@ -288,12 +290,23 @@ function draw() {
   // airmail border stripe colours, picked once per generation: half shades
   // of the indigo seed, half the baubles' own dark palette colours
   stripeColours = []
+  stripeJitter = []
   for (let i = 0; i < 200; i++) {
     stripeColours.push(
       random() < 0.5
         ? randomNearColour(seedColour, 0.1)
         : random(razorPalettes)[0],
     )
+    // each stripe is 4 translucent layers, each with its 4 corners nudged
+    // by up to 15% of the stripe width — stored as fractions of the stripe
+    // width so it scales with the window and stays put between zooms
+    let layers = []
+    for (let l = 0; l < stripeLayers; l++) {
+      let pts = []
+      for (let k = 0; k < 8; k++) pts.push(random(-0.15, 0.15))
+      layers.push(pts)
+    }
+    stripeJitter.push(layers)
   }
 
   focusIndex = 0
@@ -432,14 +445,25 @@ function drawAirmailBorder(b) {
   ctx.rect(b, b, width - b * 2, height - b * 2)
   ctx.clip('evenodd')
 
+  // each stripe is stacked from slightly offset translucent copies, so its
+  // edges blur and wobble instead of reading as one crisp polygon
   let s = b * 1.3 // stripe width, measured along the edge
   let n = ceil((width + height) / s) + 2
+  ctx.globalAlpha = 0.5
   for (let i = 0; i < n; i += 2) {
     let c = i * s
-    fill(stripeColours[(i / 2) % stripeColours.length])
-    quad(c, 0, c + s, 0, c + s - height, height, c - height, height)
+    let idx = (i / 2) % stripeColours.length
+    fill(stripeColours[idx])
+    for (let j of stripeJitter[idx]) {
+      quad(
+        c + j[0] * s, j[1] * s,
+        c + s + j[2] * s, j[3] * s,
+        c + s - height + j[4] * s, height + j[5] * s,
+        c - height + j[6] * s, height + j[7] * s,
+      )
+    }
   }
-  ctx.restore()
+  ctx.restore() // also resets globalAlpha
 }
 
 // the text box, full width inside the border along the bottom: white band,
@@ -499,45 +523,33 @@ function drawTextBox(f) {
   fill(seedColour)
   text(label.toUpperCase(), textLeft, top)
 
+  // body text: the title on one line, a step split into two balanced lines;
+  // each line then stretched or squeezed horizontally to run the full
+  // width of the box
   let bodyTop = top + labelSize * 1.6
   let bodyH = bottom - bodyTop
-  let size = fitTextSize(body.slice(1), textW, bodyH, isTitle ? 0.75 : 0.45)
+  let lines = isTitle ? [body.slice(1)] : splitBalanced(body.slice(1))
+  let size = bodyH / (lines.length * 1.15)
   textSize(size)
   fill(textBlue)
-  let lines = wrapLines(body.slice(1), textW)
   for (let i = 0; i < lines.length; i++) {
-    text(lines[i], textLeft, bodyTop + i * size * 1.2)
+    push()
+    translate(textLeft, bodyTop + i * size * 1.15)
+    scale(textW / textWidth(lines[i]), 1)
+    text(lines[i], 0, 0)
+    pop()
   }
 }
 
-// largest text size (capped at maxFrac of the box height) whose wrapped
-// lines fit inside w x h
-function fitTextSize(str, w, h, maxFrac) {
-  let size = h * maxFrac
-  while (size > 6) {
-    textSize(size)
-    if (wrapLines(str, w).length * size * 1.2 <= h) return size
-    size *= 0.92
+// splits text into two lines at the space nearest its middle
+function splitBalanced(str) {
+  let mid = str.length / 2
+  let best = -1
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === ' ' && (best < 0 || abs(i - mid) < abs(best - mid))) best = i
   }
-  return size
-}
-
-// greedy word wrap at the current textSize()
-function wrapLines(str, w) {
-  let words = str.split(' ')
-  let lines = []
-  let line = ''
-  for (let word of words) {
-    let next = line ? line + ' ' + word : word
-    if (line && textWidth(next) > w) {
-      lines.push(line)
-      line = word
-    } else {
-      line = next
-    }
-  }
-  if (line) lines.push(line)
-  return lines
+  if (best < 0) return [str]
+  return [str.slice(0, best), str.slice(best + 1)]
 }
 
 // click/tap cycles: full view -> object 1 -> object 2 -> ... -> object 7
