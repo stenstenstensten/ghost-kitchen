@@ -79,9 +79,9 @@ let recipeSources = [
 async function loadRecipe() {
   for (let base of recipeSources) {
     try {
-      let list = await (await fetch(base + 'index.json')).json()
+      let list = await (await fetch(base + 'index.json', { cache: 'no-store' })).json()
       let file = list[floor(Math.random() * list.length)]
-      recipe = await (await fetch(base + file)).json()
+      recipe = await (await fetch(base + file, { cache: 'no-store' })).json()
       renderView()
       return
     } catch (e) {
