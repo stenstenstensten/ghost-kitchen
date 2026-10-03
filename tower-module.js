@@ -38,6 +38,7 @@ let showRazorAndOutlines = true
 // (outlined when they land on white) plus a second, unlined batch of 5.
 let razorObjects = []
 let artSnapshot = null
+let artBounds // non-white extent of artSnapshot — see findContentBounds()
 
 // EXPERIMENT — one dedicated 3-colour palette per razor object (index 0-11,
 // matching objects 1-12), white stays the shared alternating background for
@@ -282,6 +283,7 @@ function draw() {
   // mouseClicked()/renderView()) can pan/scale it without ever re-running
   // the (expensive) generative drawing above
   artSnapshot = get()
+  artBounds = findContentBounds()
 
   // airmail border stripe colours, picked once per generation: half shades
   // of the indigo seed, half the baubles' own dark palette colours
@@ -328,11 +330,18 @@ function renderView() {
   background(bgColour)
 
   if (focusIndex === 0) {
-    // whole artwork, scaled down to fit the art area without stretching
-    let s = min(f.artW / width, f.artH / height)
-    let w = width * s
-    let h = height * s
-    image(artSnapshot, f.artX + (f.artW - w) / 2, f.artY + (f.artH - h) / 2, w, h)
+    // the drawn content (its blank margins trimmed off), scaled to fill the
+    // art area edge to edge without stretching — whichever axis overflows
+    // gets trimmed evenly from both sides
+    let ab = artBounds
+    let aspect = f.artW / f.artH
+    let cropW = ab.w
+    let cropH = ab.h
+    if (cropW / cropH > aspect) cropW = cropH * aspect
+    else cropH = cropW / aspect
+    let cropX = ab.x + (ab.w - cropW) / 2
+    let cropY = ab.y + (ab.h - cropH) / 2
+    image(artSnapshot, f.artX, f.artY, f.artW, f.artH, cropX, cropY, cropW, cropH)
   } else {
     let obj = razorObjects[focusIndex - 1]
     if (!obj) return
@@ -359,11 +368,33 @@ function renderView() {
   if (recipe) drawTextBox(f)
 }
 
+// bounding box of everything non-white in the finished artwork, so the
+// full view can trim the drawing's blank margins before fitting it
+function findContentBounds() {
+  loadPixels()
+  let minX = width,
+    minY = height,
+    maxX = 0,
+    maxY = 0
+  for (let y = 0; y < height; y += 3) {
+    for (let x = 0; x < width; x += 3) {
+      if (isSolidPixel(x, y, 240)) {
+        minX = min(minX, x)
+        maxX = max(maxX, x)
+        minY = min(minY, y)
+        maxY = max(maxY, y)
+      }
+    }
+  }
+  if (maxX <= minX) return { x: 0, y: 0, w: width, h: height }
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY }
+}
+
 // frame geometry shared by renderView() and the text box: border thickness,
 // the text box along the bottom inside the border, and the art area above it
 function frameLayout() {
   let b = min(width, height) * 0.03
-  let gap = b * 0.4
+  let gap = 0 // artwork runs right up to the border and text box
   let boxH = (height - b * 2) * 0.12
   let boxX = b
   let boxY = height - b - boxH
