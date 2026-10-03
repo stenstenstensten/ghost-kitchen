@@ -55,7 +55,8 @@ let focusIndex = 0
 
 // frame styling — see renderView() / drawTextBox()
 let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
-let textBlue // dark blue for the box rule and step text, set in setup()
+let textBlue // dark blue for the box rule, set in setup()
+let boxFill, boxText // text box background and text colours, set in setup()
 let stripeColours = []
 let stripeIsWhite = [] // white stripes get no little line
 let stripeTickJitter = [] // per stripe, per border crossing: [length factor, angle]
@@ -114,6 +115,11 @@ function setup() {
   ]
 
   textBlue = color(240, 80, 35)
+
+  // TRYING: blue box with white text. To go back to white box / blue text:
+  // boxFill = bgColour, boxText = textBlue
+  boxFill = seedColour
+  boxText = color(0, 0, 100)
 
   loadRecipe()
   // canvas text only uses a web font once it's loaded — redraw when it is
@@ -560,7 +566,7 @@ function drawTextBox(f) {
   noStroke()
   fill(bgColour)
   rect(x, y, w, boxH)
-  noFill()
+  fill(boxFill)
   stroke(textBlue)
   strokeWeight(rule)
   rect(x + whiteBand, y + whiteBand, w - whiteBand * 2, boxH - whiteBand * 2)
@@ -581,7 +587,7 @@ function drawTextBox(f) {
   let capSize = innerH / 0.7
   textSize(capSize)
   textAlign(LEFT, BASELINE)
-  fill(textBlue)
+  fill(boxText)
   text(body.charAt(0), left, bottom)
   let capW = textWidth(body.charAt(0))
 
