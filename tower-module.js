@@ -54,7 +54,10 @@ let razorPalettes = []
 let focusIndex = 0
 
 // frame styling — see renderView() / drawTextBox()
-let monoFont = 'IBM Plex Mono' // p5 adds its own quotes, so no fallback list here
+// text box font. p5 adds its own quotes, so no fallback list here. p5 1.x
+// can't pick a font weight, so tower-module.html loads only the weight wanted
+// (ExtraLight, 200) and the browser falls back to it
+let boxFont = 'IBM Plex Sans'
 let textBlue // dark blue for the box rule, set in setup()
 let boxFill, boxText // text box background and text colours, set in setup()
 let stripeColours = []
@@ -123,7 +126,7 @@ function setup() {
 
   loadRecipe()
   // canvas text only uses a web font once it's loaded — redraw when it is
-  document.fonts.load('16px "IBM Plex Mono"').then(() => renderView())
+  document.fonts.load('200 16px "IBM Plex Sans"').then(() => renderView())
 }
 
 // ported from sketch.js's computeLayout(), extended with a matching column
@@ -546,7 +549,7 @@ function drawStripeTicks(b) {
 }
 
 // the text box, full width inside the border along the bottom: white band,
-// then a dark blue rule, then the text — a mono drop cap the full height of
+// then a dark blue rule, then the text — a drop cap the full height of
 // the text block, then the recipe title (full view) or the zoomed object's
 // step
 function drawTextBox(f) {
@@ -580,7 +583,7 @@ function drawTextBox(f) {
   let innerH = bottom - top
 
   noStroke()
-  textFont(monoFont)
+  textFont(boxFont)
   textStyle(NORMAL)
 
   // drop cap: cap height (~0.7 of the font size) fills the text block
