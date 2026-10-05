@@ -62,6 +62,8 @@ let boxFont = 'IBM Plex Sans'
 let textBlue // dark blue for the box rule, set in setup()
 let boxFill, boxText // text box background and text colours, set in setup()
 let upperCaseText = true // TRYING: all caps in the text box
+let textGrid = true // TRYING: one letter per grid cell; false = stretched lines
+let gridLineWeight = 0.5 // the grid's fine white lines
 let stripeColours = []
 let stripeIsWhite = [] // white stripes get no little line
 let stripeTickJitter = [] // per stripe, per border crossing: [length factor, angle]
@@ -619,6 +621,12 @@ function drawTextBox(f) {
   // horizontally to run the full width of the box
   let lines = isTitle ? [body.slice(1)] : splitBalanced(body.slice(1))
   let n = lines.length
+
+  if (textGrid) {
+    drawLetterGrid(lines, left, textLeft, right, top, bottom, textSoft)
+    return
+  }
+
   let size = innerH / (n * 0.7 + (n - 1) * 0.35)
   let capH = size * 0.7
   textSize(size)
@@ -631,6 +639,57 @@ function drawTextBox(f) {
     softly(textSoft, () => text(lines[i], 0, 0), 1 / sx)
     pop()
   }
+}
+
+// alternative to stretching the text: each line's width divided into one
+// cell per character (letters and spaces), ruled with very fine white lines,
+// with one unstretched letter centred in each cell. The drop cap gets its
+// own full-height cell on the left.
+function drawLetterGrid(lines, left, textLeft, right, top, bottom, textSoft) {
+  let n = lines.length
+  let rowH = (bottom - top) / n
+  let size = (rowH * 0.62) / 0.7 // cap height ~62% of the row
+  let capH = size * 0.7
+  let textW = right - textLeft
+
+  // fine white grid
+  noFill()
+  stroke(boxText)
+  strokeWeight(gridLineWeight)
+  rectMode(CORNER)
+  rect(left, top, right - left, bottom - top)
+  rectMode(CENTER)
+  line(textLeft, top, textLeft, bottom) // drop cap's cell
+  for (let i = 0; i < n; i++) {
+    let rowTop = top + i * rowH
+    if (i > 0) line(textLeft, rowTop, right, rowTop)
+    let cellW = textW / lines[i].length
+    for (let c = 1; c < lines[i].length; c++) {
+      let cx = textLeft + c * cellW
+      line(cx, rowTop, cx, rowTop + rowH)
+    }
+  }
+
+  // one letter per cell, squeezed only if it's wider than its cell
+  noStroke()
+  fill(boxText)
+  textSize(size)
+  textAlign(CENTER, BASELINE)
+  for (let i = 0; i < n; i++) {
+    let baseline = top + i * rowH + (rowH + capH) / 2
+    let cellW = textW / lines[i].length
+    for (let c = 0; c < lines[i].length; c++) {
+      let ch = lines[i][c]
+      if (ch === ' ') continue
+      let sx = min(1, (cellW * 0.85) / textWidth(ch))
+      push()
+      translate(textLeft + (c + 0.5) * cellW, baseline)
+      scale(sx, 1)
+      softly(textSoft, () => text(ch, 0, 0), 1 / sx)
+      pop()
+    }
+  }
+  textAlign(LEFT, BASELINE)
 }
 
 // splits text into two lines at the space nearest its middle
