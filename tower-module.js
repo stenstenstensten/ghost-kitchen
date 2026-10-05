@@ -61,6 +61,7 @@ let focusIndex = 0
 let boxFont = 'IBM Plex Sans'
 let textBlue // dark blue for the box rule, set in setup()
 let boxFill, boxText // text box background and text colours, set in setup()
+let upperCaseText = true // TRYING: all caps in the text box
 let stripeColours = []
 let stripeIsWhite = [] // white stripes get no little line
 let stripeTickJitter = [] // per stripe, per border crossing: [length factor, angle]
@@ -566,6 +567,7 @@ function drawTextBox(f) {
   let isTitle = focusIndex === 0
   let body = isTitle ? recipe.title : recipe.steps[focusIndex - 1]
   if (!body) return
+  if (upperCaseText) body = body.toUpperCase()
 
   let x = f.boxX
   let y = f.boxY
