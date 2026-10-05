@@ -592,7 +592,9 @@ function drawTextBox(f) {
   })
   rectMode(CENTER)
 
-  let pad = boxH * 0.16
+  // the letter grid fills the panel with just a small inset; stretched text
+  // keeps more breathing room
+  let pad = textGrid ? boxH * 0.04 : boxH * 0.16
   let left = x + whiteBand + rule + pad
   let top = y + whiteBand + rule + pad
   let right = x + w - whiteBand - rule - pad
@@ -603,16 +605,18 @@ function drawTextBox(f) {
   textFont(boxFont)
   textStyle(NORMAL)
 
-  // drop cap: cap height (~0.7 of the font size) fills the text block
-  let capSize = innerH / 0.7
+  // drop cap: cap height (~0.7 of the font size) fills the text block —
+  // or, in the grid, its own cell with a small margin all round
+  let capMargin = textGrid ? innerH * 0.1 : 0
+  let capSize = (innerH - capMargin * 2) / 0.7
   textSize(capSize)
   textAlign(LEFT, BASELINE)
   fill(boxText)
   let textSoft = f.b * 0.04 // much smaller nudge than the panel, so it stays readable
-  softly(textSoft, () => text(body.charAt(0), left, bottom))
+  softly(textSoft, () => text(body.charAt(0), left + capMargin, bottom - capMargin))
   let capW = textWidth(body.charAt(0))
 
-  let textLeft = left + capW + pad * 0.6
+  let textLeft = textGrid ? left + capW + capMargin * 2 : left + capW + pad * 0.6
   let textW = right - textLeft
 
   // body text: the title on one line, a step split into two balanced lines.
